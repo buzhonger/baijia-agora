@@ -1,0 +1,24 @@
+# 依赖
+node_modules/
+
+# 本地数据（含 API 密钥、会话历史）——绝不上传
+data/
+workspace/
+
+# 前端构建产物
+web/dist/
+
+# 桌面 App 打包产物（exe/dmg 等，体积大，不进仓库）
+release/
+dist_electron/
+/dist/
+*.exe
+*.dmg
+*.AppImage
+
+# 日志与杂项
+*.log
+.DS_Store
+Thumbs.db
+
+# 说明：示例配置在项目根目录 config.example.json（不含真实密钥，可安全上传）

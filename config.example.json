@@ -1,0 +1,36 @@
+{
+  "_说明": "这是配置文件的示例。真实配置在 data/config.json（已被 .gitignore 排除，不会上传）。你也可以完全不管这个文件，直接在软件界面『设置』里填 API Key，程序会自动生成 data/config.json。",
+
+  "workspace": "C:/你的/工作区/路径",
+
+  "providers": {
+    "deepseek": {
+      "kind": "openai",
+      "label": "DeepSeek 深度求索",
+      "baseURL": "https://api.deepseek.com",
+      "apiKey": "在这里填你的_DeepSeek_API_Key"
+    },
+    "zhipu": {
+      "kind": "openai",
+      "label": "智谱 GLM",
+      "baseURL": "https://open.bigmodel.cn/api/paas/v4",
+      "apiKey": "在这里填你的_智谱_API_Key"
+    }
+  },
+
+  "agents": [
+    {
+      "id": "示例-用界面添加时会自动生成uuid",
+      "name": "小规",
+      "providerId": "deepseek",
+      "model": "deepseek-chat",
+      "role": "规划师",
+      "systemPrompt": "你是项目规划师，负责把需求拆成清晰的计划。",
+      "avatar": "📐",
+      "color": "#7c5cff",
+      "enabled": true,
+      "maxRepliesPerRound": 1,
+      "maxTokens": 2048
+    }
+  ]
+}

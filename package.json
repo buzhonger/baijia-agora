@@ -1,0 +1,41 @@
+{
+  "name": "ai-collab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "百家 · Agora —— 让来自不同公司的多个 AI 在同一个聊天群里同台协作、辩论、博弈",
+  "author": "只想要低调 <https://space.bilibili.com/1871554482>",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix web install",
+    "dev": "node scripts/free-port.mjs 8787 5173 && concurrently -n server,web -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix web run dev\"",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix server run start",
+    "desktop": "npm run build && electron .",
+    "desktop:pack": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.agora.baijia",
+    "productName": "Agora",
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "web/dist/**/*",
+      "!**/node_modules/*/{test,__tests__,tests,example,examples}/**"
+    ],
+    "extraMetadata": { "main": "electron/main.js" },
+    "win": { "target": "dir" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}
