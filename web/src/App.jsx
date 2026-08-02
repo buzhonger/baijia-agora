@@ -27,6 +27,7 @@ export default function App() {
   const [confirm, setConfirm] = useState(null); // 危险操作确认
   const [input, setInput] = useState('');
   const [noRelay, setNoRelay] = useState(false); // 禁止AI自行接龙（持续开关）
+  const [noTriggerHint, setNoTriggerHint] = useState(false); // 发了没@人的消息时的温和提示
   const [session, setSession] = useState(null);   // 当前会话完整对象（含 participants）
   const [participantsUI, setParticipantsUI] = useState(null); // 参与者弹层：{ mode:'new'|'edit' }
   const [exportOpen, setExportOpen] = useState(false);
@@ -184,6 +185,7 @@ export default function App() {
     wsRef.current?.send({ type: 'user_message', text });
     setInput('');
     setMentionMenu(null);
+    setNoTriggerHint(false);
     // @所有人 / @everyone：本对话全部参与者按成员顺序依次回应（全体通知 / 上帝命令）
     if (/@\s*(所有人|everyone|全体|all)/i.test(text)) {
       const allIds = sessionAgents.map((a) => a.id);
@@ -199,6 +201,9 @@ export default function App() {
     if (mentioned.length) {
       // 把所有被点名的人按顺序发给后端，后端依次让他们都发言
       setTimeout(() => wsRef.current?.send({ type: 'trigger_agents', agentIds: mentioned, noRelay }), 150);
+    } else if (sessionAgents.length) {
+      // 没 @ 任何人、也不是@所有人 → 不会有 AI 回复，给新手一个温和提示
+      setNoTriggerHint(true);
     }
   }
 
@@ -235,6 +240,7 @@ export default function App() {
 
   function triggerAgent(agentId) {
     if (!activeId) return;
+    setNoTriggerHint(false);
     wsRef.current?.send({ type: 'trigger_agent', agentId, noRelay });
   }
 
@@ -527,6 +533,12 @@ export default function App() {
             placeholder={activeId ? t('composer.placeholder') : t('composer.placeholderIdle')}
             disabled={!activeId}
           />
+          {noTriggerHint && (
+            <div style={{ marginBottom: 6, padding: '6px 10px', borderRadius: 8, background: 'rgba(124,92,255,0.12)', border: '1px solid var(--accent)', fontSize: 12, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>💡 消息已发出，但还没人回复——想让 AI 回复，请 <b>@某个成员</b>、<b>@所有人</b>，或点上方成员头像。</span>
+              <button className="icon-btn" style={{ marginLeft: 'auto' }} onClick={() => setNoTriggerHint(false)}>✕</button>
+            </div>
+          )}
           {noRelay && <div className="inline-note" style={{ color: 'var(--accent)', marginBottom: 4 }}>本次输入已开启禁止自行接龙</div>}
           <div className="row" style={{ marginBottom: 6 }}>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}
