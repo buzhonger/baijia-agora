@@ -47,7 +47,11 @@ export const TOOL_DEFS = [
   },
 ];
 
-// 哪些工具属于"危险操作"，需要用户确认
+// 哪些工具属于"高危操作"（Auto 模式下仍强制弹确认）。
+// 目前只有 run_command：它能执行任意系统命令（删文件、装软件、联网、改配置等），
+// 破坏力不受工作区沙箱约束，风险最高。
+// 而 read_file / list_dir（只读）、write_file（受 safeResolve 限制、只能写入工作区目录内）
+// 影响范围小，不列为高危——Auto 模式下自动放行，Normal 模式下才逐个确认。
 export const DANGEROUS_TOOLS = new Set(['run_command']);
 
 // 把用户给的相对路径解析成工作区内的绝对路径，越界则报错
@@ -62,6 +66,10 @@ function safeResolve(workspace, p) {
 }
 
 export async function runTool({ workspace, name, input }) {
+  // 确保工作区目录存在（第一次使用时自动创建）
+  const wsRoot = resolve(workspace);
+  if (!existsSync(wsRoot)) mkdirSync(wsRoot, { recursive: true });
+
   switch (name) {
     case 'read_file': {
       const f = safeResolve(workspace, input.path);

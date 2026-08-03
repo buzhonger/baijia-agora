@@ -27,6 +27,7 @@ export default function App() {
   const [confirm, setConfirm] = useState(null); // 危险操作确认
   const [input, setInput] = useState('');
   const [noRelay, setNoRelay] = useState(false); // 禁止AI自行接龙（持续开关）
+  const [toolMode, setToolMode] = useState('normal'); // 工具确认模式：normal=全部确认 / auto=仅高危确认
   const [noTriggerHint, setNoTriggerHint] = useState(false); // 发了没@人的消息时的温和提示
   const [session, setSession] = useState(null);   // 当前会话完整对象（含 participants）
   const [participantsUI, setParticipantsUI] = useState(null); // 参与者弹层：{ mode:'new'|'edit' }
@@ -189,7 +190,7 @@ export default function App() {
     // @所有人 / @everyone：本对话全部参与者按成员顺序依次回应（全体通知 / 上帝命令）
     if (/@\s*(所有人|everyone|全体|all)/i.test(text)) {
       const allIds = sessionAgents.map((a) => a.id);
-      if (allIds.length) setTimeout(() => wsRef.current?.send({ type: 'trigger_agents', agentIds: allIds, noRelay }), 150);
+      if (allIds.length) setTimeout(() => wsRef.current?.send({ type: 'trigger_agents', agentIds: allIds, noRelay, toolMode }), 150);
       return;
     }
     // 用户 @ 了谁，这些人就都要依次回复（按 @ 出现的先后顺序），一个不落。
@@ -200,7 +201,7 @@ export default function App() {
       .map((x) => x.a.id);
     if (mentioned.length) {
       // 把所有被点名的人按顺序发给后端，后端依次让他们都发言
-      setTimeout(() => wsRef.current?.send({ type: 'trigger_agents', agentIds: mentioned, noRelay }), 150);
+      setTimeout(() => wsRef.current?.send({ type: 'trigger_agents', agentIds: mentioned, noRelay, toolMode }), 150);
     } else if (sessionAgents.length) {
       // 没 @ 任何人、也不是@所有人 → 不会有 AI 回复，给新手一个温和提示
       setNoTriggerHint(true);
@@ -241,7 +242,7 @@ export default function App() {
   function triggerAgent(agentId) {
     if (!activeId) return;
     setNoTriggerHint(false);
-    wsRef.current?.send({ type: 'trigger_agent', agentId, noRelay });
+    wsRef.current?.send({ type: 'trigger_agent', agentId, noRelay, toolMode });
   }
 
   function startAuto() {
@@ -249,7 +250,7 @@ export default function App() {
     const order = sessionAgents.map((a) => a.id);
     if (!order.length) return;
     setAutoRunning(true);
-    wsRef.current?.send({ type: 'start_autoflow', order, rounds: 1 });
+    wsRef.current?.send({ type: 'start_autoflow', order, rounds: 1, toolMode });
   }
 
   function stopAuto() {
@@ -529,7 +530,7 @@ export default function App() {
             ref={inputRef}
             value={input}
             onChange={onInputChange}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); if (e.key === 'Escape') setMentionMenu(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); if (e.key === 'Escape') setMentionMenu(null); if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); setToolMode(m => m === 'normal' ? 'auto' : 'normal'); } }}
             placeholder={activeId ? t('composer.placeholder') : t('composer.placeholderIdle')}
             disabled={!activeId}
           />
@@ -548,6 +549,11 @@ export default function App() {
           </div>
           <div className="row">
             <button className="btn" onClick={send} disabled={!activeId || !input.trim()}>{t('composer.send')}</button>
+            <button
+              className={`tool-mode-btn ${toolMode === 'auto' ? 'auto' : ''}`}
+              onClick={() => setToolMode(m => m === 'normal' ? 'auto' : 'normal')}
+              title="切换工具确认模式 (Shift+Tab)：Normal=所有工具操作需确认 / Auto=仅高危操作需确认"
+            >{toolMode === 'auto' ? '⚡ Auto' : '🛡 Normal'}</button>
             <span className="inline-note">{t('composer.hint')}</span>
           </div>
         </div>

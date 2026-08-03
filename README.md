@@ -67,6 +67,14 @@ npm run desktop        # 以桌面窗口运行
 npm run desktop:pack   # 打包成安装包（Win / macOS / Linux）
 ```
 
+> ⚠️ 若运行 `npm run desktop` 报错 `Electron failed to install correctly`，
+> 说明 Electron 的二进制没装全（国内网络常见）。修复：
+> ```bash
+> rm -rf node_modules/electron          # Windows: rmdir /s /q node_modules\electron
+> npm install electron --electron_mirror=https://npmmirror.com/mirrors/electron/
+> ```
+> 装完再重新 `npm run desktop`。或直接从 [Releases](../../releases) 下载免安装的绿色版。
+
 ## 📁 目录结构
 
 ```

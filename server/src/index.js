@@ -179,10 +179,14 @@ wss.on('connection', (ws) => {
       const session = getSession(ws.sessionId);
       const cfg = loadConfig();
       const initialIds = msg.type === 'trigger_agents' ? (msg.agentIds || []) : [msg.agentId];
+      const toolMode = msg.toolMode === 'auto' ? 'auto' : 'normal';
       const queue = initialIds.map((id) => cfg.agents.find((a) => a.id === id)).filter(Boolean);
       if (!session || !queue.length) return;
       const controller = new AbortController();
       ws.abortControllers.add(controller);
+      // 捕获触发时的会话ID：即使用户切到别的对话，本次输出仍推送到原会话（不串台、不中断）
+      const triggerSessionId = ws.sessionId;
+      const emitToSession = (event) => broadcast(triggerSessionId, event);
 
       (async () => {
         // 用户直接 @ 的人数作为保底：这些人一定都要发言，不被上限砍。
@@ -196,7 +200,7 @@ wss.on('connection', (ws) => {
           const isInitial = initialSet.has(current.id);
           // 紧邻重复只在非保底时跳过（保底成员即使刚被提及也要发言）
           if (current.id === lastSpoker && !isInitial) continue;
-          const produced = await runAgentTurn({ session, agent: current, emit, signal: controller.signal });
+          const produced = await runAgentTurn({ session, agent: current, emit: emitToSession, signal: controller.signal, toolMode });
           turns += 1;
           lastSpoker = current.id;
 
@@ -204,7 +208,7 @@ wss.on('connection', (ws) => {
           // 提示和真实发言顺序一致（之前加到末尾会导致提示与下一个发言者对不上）。
           // noRelay=true 时禁止自动接龙。
           if (!msg.noRelay) {
-            const fresh = getSession(ws.sessionId);
+            const fresh = getSession(triggerSessionId);
             const mentioned = parseMentions(produced?.text, fresh, cfg.agents, current.id);
             // 按 @ 出现顺序，逆序 unshift，保证最终队首顺序 = 提及顺序
             for (let i = mentioned.length - 1; i >= 0; i--) {
@@ -218,14 +222,14 @@ wss.on('connection', (ws) => {
                 authorType: 'system', authorName: '系统',
                 text: `↪ 「${current.name}」点名了 @${nx.name}，接下来由他发言`,
               });
-              emit({ type: 'message_added', message: note });
+              emitToSession({ type: 'message_added', message: note });
             }
           }
         }
         if (turns >= cap && queue.length) {
-          const s2 = getSession(ws.sessionId);
+          const s2 = getSession(triggerSessionId);
           const note = addMessage(s2, { authorType: 'system', authorName: '系统', text: `⏹ 已达全场发言上限（${cap} 次），停止接力以节省 token。可调高上限或分批 @。` });
-          emit({ type: 'message_added', message: note });
+          emitToSession({ type: 'message_added', message: note });
         }
       })().finally(() => ws.abortControllers.delete(controller));
       return;
@@ -240,7 +244,7 @@ wss.on('connection', (ws) => {
       runAutoFlow({
         session, agents: cfg.agents,
         order: msg.order || participantIds,
-        emit,
+        emit, toolMode: msg.toolMode === 'auto' ? 'auto' : 'normal',
       });
       return;
     }

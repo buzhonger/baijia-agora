@@ -34,7 +34,7 @@ function askConfirm(emit, payload) {
 
 // 让某个 agent 在 session 里应答一次。
 // emit(event) 会把事件推给前端；signal 用于中止。
-export async function runAgentTurn({ session, agent, emit, signal, enableTools = true, inAutoflow = false }) {
+export async function runAgentTurn({ session, agent, emit, signal, enableTools = true, inAutoflow = false, toolMode = 'normal' }) {
   const cfg = loadConfig();
   const provider = cfg.providers[agent.providerId];
   if (!provider || !provider.apiKey) {
@@ -142,9 +142,11 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
     const toolResults = [];
     for (const call of toolCalls) {
       const isDangerous = DANGEROUS_TOOLS.has(call.name);
+      // toolMode='auto': 只有高危操作弹确认；'normal': 所有工具都弹确认
+      const needConfirm = toolMode === 'auto' ? isDangerous : true;
       let approved = true;
-      if (isDangerous) {
-        emit({ type: 'message_delta', messageId: msg.id, text: `\n\n🔧 请求执行：\`${call.name}\` ${JSON.stringify(call.input)}` });
+      if (needConfirm) {
+        emit({ type: 'message_delta', messageId: msg.id, text: `\n\n🔧 请求执行：\`${call.name}\` ${JSON.stringify(call.input).slice(0, 200)}` });
         approved = await askConfirm(emit, {
           agentName: agent.name, tool: call.name, input: call.input,
         });
@@ -159,7 +161,11 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
       } else {
         // 对话级工作区优先，没设则用全局默认
         const ws = (session.workspace && session.workspace.trim()) ? session.workspace : cfg.workspace;
-        result = await runTool({ workspace: ws, name: call.name, input: call.input });
+        try {
+          result = await runTool({ workspace: ws, name: call.name, input: call.input });
+        } catch (e) {
+          result = { ok: false, error: e.message || '工具执行出错' };
+        }
         const summary = result.ok ? '✅ 完成' : `❌ ${result.error || '失败'}`;
         emit({ type: 'message_delta', messageId: msg.id, text: `\n${summary}` });
       }

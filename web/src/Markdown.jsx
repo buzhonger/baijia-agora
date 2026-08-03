@@ -75,6 +75,11 @@ export default function Markdown({ text, mentionNames }) {
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
+    // 所有链接改为新标签打开，避免点击后离开工作台导致正在进行的 AI 输出被中断
+    root.querySelectorAll('a[href]').forEach((a) => {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
     // 给每个 <pre> 加复制按钮
     root.querySelectorAll('pre').forEach((pre) => {
       if (pre.querySelector('.copy-btn')) return;
