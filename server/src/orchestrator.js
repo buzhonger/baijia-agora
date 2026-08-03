@@ -59,9 +59,14 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
     .filter((a) => a && a.id !== agent.id)
     .map((a) => a.name);
   if (teammates.length) {
-    systemPrompt += `\n\n【团队】你是「${agent.name}」。在场的其他队友有：${teammates.map((n) => '@' + n).join('、')}。`
-      + `当你需要某位队友接着处理时，在回复里用「@名字」点名他（例如 @${teammates[0]}），系统会自动让他接着发言。`
-      + `注意：只能 @ 其他队友，绝不要 @ 你自己（${agent.name}）；不需要别人接力时，正常回复、不要 @ 任何人。`;
+    systemPrompt += `\n\n【团队】你是「${agent.name}」。在场的其他队友有：${teammates.join('、')}。`
+      + `\n【@点名规则——务必严格遵守】`
+      + `\n• "@ + 名字"是一个特殊指令，含义是"让这位队友接着发言"。系统会自动触发该队友回复。`
+      + `\n• 因此：只有当你确实想让某位队友【接下来立即发言】时，才写「@名字」（例如 @${teammates[0]}）。`
+      + `\n• 每条回复最多只能 @ 一位队友（你想让谁接力就 @ 谁一个人）。`
+      + `\n• 如果你只是提到、感谢、引用某位队友（例如"谢谢${teammates[0]}的观点"），直接写名字，【绝对不要加 @】，否则会错误触发对方发言。`
+      + `\n• 不需要别人接力时，正常回复，不要 @ 任何人。`
+      + `\n• 绝不要 @ 你自己（${agent.name}）。`;
   }
 
   // ===关键=== 注入该 AI 与用户的私聊历史（仅此 AI 可见，其他 AI 的上下文里没有这段）

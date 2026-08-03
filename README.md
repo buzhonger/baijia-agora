@@ -18,9 +18,17 @@
 
 ## 🖼️ 界面预览
 
+**主界面**
+
 ![主界面](docs/screenshots/01-main.png)
 
-<!-- 更多截图：多 AI 讨论 / AI 狼人杀 会陆续补充 -->
+**多 AI 同场讨论**
+
+![多 AI 讨论](docs/screenshots/02-chat.png)
+
+**AI 狼人杀**
+
+![AI 狼人杀](docs/screenshots/03-werewolf.png)
 
 ## 🚀 快速开始
 
