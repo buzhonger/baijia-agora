@@ -96,6 +96,15 @@ body {
 }
 .msg.user .bubble { background: var(--panel-2); }
 .msg.system .bubble { background: transparent; border-style: dashed; color: var(--muted); font-size: 13px; }
+.msg .bubble { position: relative; }
+.bubble-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.msg-copy-btn {
+  background: transparent; border: 1px solid var(--border); border-radius: 5px;
+  color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 8px;
+  opacity: 0; transition: opacity .15s, color .15s, border-color .15s;
+}
+.msg .bubble:hover .msg-copy-btn { opacity: 0.7; }
+.msg-copy-btn:hover { opacity: 1 !important; color: var(--text); border-color: var(--accent); }
 .cursor::after { content: '▋'; color: var(--accent); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 0%,50% { opacity: 1; } 50.01%,100% { opacity: 0; } }
 

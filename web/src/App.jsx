@@ -718,6 +718,22 @@ export default function App() {
   );
 }
 
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="msg-copy-btn"
+      title="复制这段内容"
+      onClick={() => {
+        navigator.clipboard.writeText(text || '').then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >{copied ? '✓ 已复制' : '⧉ 复制'}</button>
+  );
+}
+
 function Message({ m, mentionNames, roleMap, onAvatarClick }) {
   const color = m.color || 'var(--muted)';
   const cls = m.authorType === 'user' ? 'user' : m.authorType === 'system' ? 'system' : 'agent';
@@ -734,6 +750,10 @@ function Message({ m, mentionNames, roleMap, onAvatarClick }) {
         {m.authorType === 'agent'
           ? <span className={m.meta?.streaming ? 'cursor' : ''}><Markdown text={m.text} mentionNames={mentionNames} /></span>
           : <span>{m.text || ' '}</span>}
+        {/* 复制按钮：非系统消息、且输出完成（非流式）时显示在右下角 */}
+        {m.authorType !== 'system' && !m.meta?.streaming && (m.text || '').trim() && (
+          <div className="bubble-actions"><CopyButton text={m.text} /></div>
+        )}
       </div>
     </div>
   );
