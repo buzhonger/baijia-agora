@@ -93,12 +93,14 @@ app.get('/api/sessions/:id', (req, res) => {
   if (!s) return res.status(404).json({ error: 'not found' });
   res.json(s);
 });
-app.post('/api/sessions', (req, res) => res.json(createSession(req.body?.title, req.body?.participants, { maxTurnsPerRequest: req.body?.maxTurnsPerRequest, workspace: req.body?.workspace })));
+app.post('/api/sessions', (req, res) => res.json(createSession(req.body?.title, req.body?.participants, { maxTurnsPerRequest: req.body?.maxTurnsPerRequest, workspace: req.body?.workspace, chatOnly: req.body?.chatOnly })));
 app.put('/api/sessions/:id/participants', (req, res) => {
   const s = getSession(req.params.id);
   if (!s) return res.status(404).json({ error: 'not found' });
   const opts = { maxTurnsPerRequest: req.body?.maxTurnsPerRequest };
   if ('workspace' in (req.body || {})) opts.workspace = req.body.workspace;
+  if ('chatOnly' in (req.body || {})) opts.chatOnly = req.body.chatOnly;
+  if ('title' in (req.body || {})) opts.title = req.body.title;
   res.json(setParticipants(s, req.body?.participants || [], opts));
 });
 app.put('/api/sessions/:id/pin', (req, res) => {
@@ -180,6 +182,7 @@ wss.on('connection', (ws) => {
       const cfg = loadConfig();
       const initialIds = msg.type === 'trigger_agents' ? (msg.agentIds || []) : [msg.agentId];
       const toolMode = msg.toolMode === 'auto' ? 'auto' : 'normal';
+      const enableTools = !session.chatOnly; // 纯聊天模式：本次全程禁用工具
       const queue = initialIds.map((id) => cfg.agents.find((a) => a.id === id)).filter(Boolean);
       if (!session || !queue.length) return;
       const controller = new AbortController();
@@ -245,6 +248,7 @@ wss.on('connection', (ws) => {
         session, agents: cfg.agents,
         order: msg.order || participantIds,
         emit, toolMode: msg.toolMode === 'auto' ? 'auto' : 'normal',
+        enableTools: !session.chatOnly,
       });
       return;
     }

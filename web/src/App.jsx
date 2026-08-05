@@ -169,11 +169,11 @@ export default function App() {
 
   async function confirmParticipants(list, options = {}) {
     if (participantsUI?.mode === 'new') {
-      const s = await api.createSession('新协作', list, options.maxTurnsPerRequest, options.workspace);
+      const s = await api.createSession('新协作', list, options);
       await refreshSessions();
       setActiveId(s.id);
     } else if (activeId) {
-      const s = await api.setParticipants(activeId, list, options.maxTurnsPerRequest, options.workspace);
+      const s = await api.setParticipants(activeId, list, options);
       setSession(s);
       await refreshSessions();
     }
@@ -262,7 +262,7 @@ export default function App() {
   async function startWerewolf(game) {
     setShowWerewolf(false);
     const scenName = game.scenario;
-    const s = await api.createSession(`🐺 狼人杀-${scenName}`, [], 99);
+    const s = await api.createSession(`🐺 狼人杀-${scenName}`, [], { maxTurnsPerRequest: 99 });
     await refreshSessions();
     setActiveId(s.id);
     // 等 join 生效再开局
@@ -368,7 +368,7 @@ export default function App() {
     if (('canUseTools' in patch || 'sessionPrompt' in patch) && session) {
       const list = (session.participants || []).map((p) =>
         p.agentId === agent.id ? { ...p, canUseTools: patch.canUseTools, sessionPrompt: patch.sessionPrompt } : p);
-      const s = await api.setParticipants(session.id, list, session.maxTurnsPerRequest);
+      const s = await api.setParticipants(session.id, list, { maxTurnsPerRequest: session.maxTurnsPerRequest });
       setSession(s);
     }
     await refreshConfig();
@@ -420,6 +420,7 @@ export default function App() {
                 <span className="session-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   {partAgents.slice(0, 3).map((a) => <Avatar key={a.id} value={a.avatar} color={a.color} size={16} />)}
                   <span className="count">{s.messageCount}</span>
+                  <button className="row-icon" title="对话设置" onClick={(e) => { e.stopPropagation(); setActiveId(s.id); setParticipantsUI({ mode: 'edit' }); }}>⚙</button>
                   <button className="row-icon" title={s.pinned ? '取消收藏' : '收藏置顶'} onClick={(e) => togglePin(s, e)}
                     style={{ color: s.pinned ? 'var(--accent)' : undefined }}>{s.pinned ? '★' : '☆'}</button>
                   <button className="row-icon" title="删除对话" onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: s.id, title: s.title }); }}>🗑</button>
@@ -437,6 +438,11 @@ export default function App() {
       </aside>
 
       <main className="main">
+        {!connected && (
+          <div style={{ background: 'var(--danger)', color: '#fff', padding: '8px 16px', textAlign: 'center', fontSize: 13, fontWeight: 500 }}>
+            ⚠ 与后端的连接已断开，正在自动重连… 当前操作可能不会生效。
+          </div>
+        )}
         <div className="topbar">
           {!activeId && <span className="inline-note">{t('top.pickSession')}</span>}
           {/* 游戏会话：显示游戏专属控制栏，不显示普通对话的成员/管理/导出 */}
@@ -594,6 +600,9 @@ export default function App() {
           maxTurns={participantsUI.mode === 'edit' ? session?.maxTurnsPerRequest : 6}
           workspace={participantsUI.mode === 'edit' ? (session?.workspace || '') : ''}
           defaultWorkspace={config?.workspace || ''}
+          chatOnly={session?.chatOnly || false}
+          sessionTitle={session?.title}
+          editMode={participantsUI?.mode === 'edit'}
           onConfirm={confirmParticipants}
           onAddMember={() => { setParticipantsUI(null); setSettingsTab('agents'); setShowSettings(true); }}
           onClose={() => setParticipantsUI(null)} />

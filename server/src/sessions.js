@@ -59,6 +59,8 @@ export function createSession(title = '新协作', participants = [], options = 
     maxTurnsPerRequest: clampTurns(options.maxTurnsPerRequest),
     // 本对话专属工作区。空 = 用全局默认工作区。可让不同对话在不同目录干活。
     workspace: options.workspace ? String(options.workspace) : '',
+    // 纯聊天模式：所有 AI 不调用工具，只用文字回复
+    chatOnly: Boolean(options.chatOnly),
     messages: [],
   };
   writeFileSync(sessionFile(session.id), JSON.stringify(session, null, 2), 'utf8');
@@ -84,6 +86,8 @@ export function setParticipants(session, participants, options = {}) {
   session.participants = normalizeParticipants(participants);
   if ('maxTurnsPerRequest' in options) session.maxTurnsPerRequest = clampTurns(options.maxTurnsPerRequest);
   if ('workspace' in options) session.workspace = options.workspace ? String(options.workspace) : '';
+  if ('chatOnly' in options) session.chatOnly = Boolean(options.chatOnly);
+  if (options.title) session.title = String(options.title);
   return saveSession(session);
 }
 

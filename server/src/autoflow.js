@@ -28,7 +28,7 @@ export function isAutoFlowRunning(sessionId) {
 // 三层限制在这里落地：
 //   第1层 每人 maxRepliesPerRound：单个成员在这次自动协作里最多发言几次
 //   第2层 session.maxTurnsPerRequest：全场（所有成员加起来）最多发言几次，硬上限
-export async function runAutoFlow({ session, agents, order, emit, toolMode = 'normal' }) {
+export async function runAutoFlow({ session, agents, order, emit, toolMode = 'normal', enableTools = true }) {
   if (running.has(session.id)) {
     emit({ type: 'system_note', text: '已有自动协作在运行中。' });
     return;
@@ -71,7 +71,7 @@ export async function runAutoFlow({ session, agents, order, emit, toolMode = 'no
         });
         emit({ type: 'message_added', message: note });
 
-        const produced = await runAgentTurn({ session, agent, emit, signal: controller.signal, inAutoflow: true, toolMode });
+        const produced = await runAgentTurn({ session, agent, emit, signal: controller.signal, inAutoflow: true, toolMode, enableTools });
 
         // 检测"过"跳过信号——AI 认为没有实质内容要补充，直接跳过本轮、不消耗配额
         if (produced && isPassReply(produced.text)) {

@@ -5,7 +5,7 @@ import { Avatar } from './Settings.jsx';
 // value: 当前参与者数组 [{ agentId, canUseTools, sessionPrompt }]
 // allAgents: 全局成员池
 // onConfirm(participants), onClose
-export default function Participants({ title, allAgents, value, maxTurns, workspace, defaultWorkspace, onConfirm, onClose, onAddMember, confirmLabel = '确定' }) {
+export default function Participants({ title, allAgents, value, maxTurns, workspace, defaultWorkspace, chatOnly, sessionTitle, editMode, onConfirm, onClose, onAddMember, confirmLabel = '确定' }) {
   // 用 map 方便按 agentId 存取
   const [picked, setPicked] = useState(() => {
     const m = {};
@@ -16,6 +16,10 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
   const [turnCap, setTurnCap] = useState(maxTurns || 6);
   // 本对话专属工作区（空 = 用全局默认）
   const [ws, setWs] = useState(workspace || '');
+  // 纯聊天模式
+  const [chatOnlyVal, setChatOnlyVal] = useState(chatOnly || false);
+  // 对话名称（编辑模式）
+  const [titleVal, setTitleVal] = useState(sessionTitle || '');
 
   function toggle(id) {
     setPicked((prev) => {
@@ -31,7 +35,7 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
 
   function confirm() {
     const list = Object.entries(picked).map(([agentId, cfg]) => ({ agentId, ...cfg }));
-    onConfirm(list, { maxTurnsPerRequest: Number(turnCap) || 6, workspace: ws.trim() });
+    onConfirm(list, { maxTurnsPerRequest: Number(turnCap) || 6, workspace: ws.trim(), chatOnly: chatOnlyVal, title: titleVal.trim() || undefined });
   }
 
   return (
@@ -42,6 +46,13 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
         <p className="inline-note">勾选哪些 AI 参与这个对话。可为每个 AI 设定本对话内的职责，并决定它能否动手写代码/跑命令。</p>
+
+        {editMode && (
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label>对话名称</label>
+            <input value={titleVal} onChange={(e) => setTitleVal(e.target.value)} placeholder="新协作" />
+          </div>
+        )}
 
         {allAgents.length === 0 && <p className="inline-note" style={{ color: 'var(--danger)' }}>成员池是空的，请先到「⚙ 设置 → AI 成员」添加。</p>}
 
@@ -85,6 +96,15 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
           <label>本对话每次请求，全场最多发言次数（1–30）</label>
           <input type="number" min="1" max="30" value={turnCap} onChange={(e) => setTurnCap(e.target.value)} />
           <span className="inline-note">自动协作时，所有 AI 加起来说到这个数就强制停，防止互相接力停不下来。</span>
+        </div>
+
+        <h3 style={{ marginTop: 20 }}>纯聊天模式</h3>
+        <div className="field">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <input type="checkbox" checked={chatOnlyVal} onChange={(e) => setChatOnlyVal(e.target.checked)} />
+            禁止所有 AI 调用工具（纯聊天）
+          </label>
+          <span className="inline-note">开启后，本对话中所有 AI 都不会执行文件读写或命令（如 list_dir、run_command 等），只会直接用文字回复。适合纯讨论、录视频素材、或不需要代码能力的场景。</span>
         </div>
 
         <h3 style={{ marginTop: 20 }}>本对话工作区（可选）</h3>

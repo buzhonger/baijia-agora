@@ -24,8 +24,8 @@ export const api = {
   setWorkspace: (workspace) => j('PUT', '/workspace', { workspace }),
   listSessions: () => j('GET', '/sessions'),
   getSession: (id) => j('GET', `/sessions/${id}`),
-  createSession: (title, participants, maxTurnsPerRequest, workspace) => j('POST', '/sessions', { title, participants, maxTurnsPerRequest, workspace }),
-  setParticipants: (id, participants, maxTurnsPerRequest, workspace) => j('PUT', `/sessions/${id}/participants`, { participants, maxTurnsPerRequest, workspace }),
+  createSession: (title, participants, options = {}) => j('POST', '/sessions', { title, participants, ...options }),
+  setParticipants: (id, participants, options = {}) => j('PUT', `/sessions/${id}/participants`, { participants, ...options }),
   pinSession: (id, pinned) => j('PUT', `/sessions/${id}/pin`, { pinned }),
   deleteSession: (id) => j('DELETE', `/sessions/${id}`),
 };
