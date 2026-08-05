@@ -99,13 +99,11 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
         </div>
 
         <h3 style={{ marginTop: 20 }}>纯聊天模式</h3>
-        <div className="field">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <input type="checkbox" checked={chatOnlyVal} onChange={(e) => setChatOnlyVal(e.target.checked)} />
-            禁止所有 AI 调用工具（纯聊天）
-          </label>
-          <span className="inline-note">开启后，本对话中所有 AI 都不会执行文件读写或命令（如 list_dir、run_command 等），只会直接用文字回复。适合纯讨论、录视频素材、或不需要代码能力的场景。</span>
-        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 6, cursor: 'pointer' }}>
+          <input type="checkbox" checked={chatOnlyVal} onChange={(e) => setChatOnlyVal(e.target.checked)} />
+          禁止所有 AI 调用工具（纯聊天）
+        </label>
+        <p className="inline-note" style={{ margin: 0 }}>开启后，本对话中所有 AI 都不会执行文件读写或命令（如 list_dir、run_command），只会用文字回复。适合纯讨论、录视频素材。</p>
 
         <h3 style={{ marginTop: 20 }}>本对话工作区（可选）</h3>
         <div className="field">
