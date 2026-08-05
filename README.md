@@ -44,6 +44,9 @@ npm run dev
 
 然后浏览器打开 **http://localhost:5173**
 
+> 退出：回到终端按 `Ctrl+C` 即可停止后端。关浏览器页面不会停止后端进程。
+> 绿色版（exe）用户直接关窗口就行，无需额外操作。
+
 ## 🔑 配置 API（都在界面「⚙ 设置」里，无需改代码）
 
 1. **API 供应商**：选一个厂商（内置 DeepSeek / 智谱GLM / Kimi / 通义 / Claude / OpenAI，地址已预填），粘贴你自己的 API Key。
