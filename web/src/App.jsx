@@ -54,6 +54,7 @@ export default function App() {
   const [showGameHub, setShowGameHub] = useState(false); // 玩法入口选择器
   const [showWerewolf, setShowWerewolf] = useState(false);
   const [gameRunning, setGameRunning] = useState(false);
+  const [clickToAt, setClickToAt] = useState(() => localStorage.getItem('agora_clickToAt') !== 'false');
   const inputRef = useRef(null);
   const wsRef = useRef(null);
   const streamRef = useRef(null);
@@ -420,7 +421,7 @@ export default function App() {
                 <span className="session-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   {partAgents.slice(0, 3).map((a) => <Avatar key={a.id} value={a.avatar} color={a.color} size={16} />)}
                   <span className="count">{s.messageCount}</span>
-                  <button className="row-icon" title="对话设置" onClick={(e) => { e.stopPropagation(); setActiveId(s.id); setParticipantsUI({ mode: 'edit' }); }}>⚙</button>
+                  <button className="row-icon" title="对话设置" onClick={(e) => { e.stopPropagation(); if (s.id === activeId) { setParticipantsUI({ mode: 'edit' }); } else { setActiveId(s.id); setTimeout(() => setParticipantsUI({ mode: 'edit' }), 300); } }}>⚙</button>
                   <button className="row-icon" title={s.pinned ? '取消收藏' : '收藏置顶'} onClick={(e) => togglePin(s, e)}
                     style={{ color: s.pinned ? 'var(--accent)' : undefined }}>{s.pinned ? '★' : '☆'}</button>
                   <button className="row-icon" title="删除对话" onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: s.id, title: s.title }); }}>🗑</button>
@@ -470,7 +471,21 @@ export default function App() {
           {activeId && !gameState && sessionAgents.length === 0 && <span className="inline-note">{t('top.noParticipants')}</span>}
           {activeId && !gameState && sessionAgents.map((a) => (
             <span key={a.id} style={{ position: 'relative', display: 'inline-flex' }}>
-              <button className="agent-chip" title={a.canUseTools ? '点击让它发言（可动手写代码）' : '点击让它发言（仅出主意，不写代码）'} onClick={() => triggerAgent(a.id)} disabled={!activeId}>
+              <button className="agent-chip"
+                title={clickToAt ? `左键: 在输入框插入 @${a.name}  |  右键: 查看信息/私聊` : `左键: 让它发言  |  右键: 查看信息/私聊`}
+                onClick={() => {
+                  if (clickToAt) {
+                    setInput(prev => prev + `@${a.name} `);
+                    document.querySelector('textarea')?.focus();
+                  } else {
+                    triggerAgent(a.id);
+                  }
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setAgentCard(a);
+                }}
+                disabled={!activeId}>
                 <Avatar value={a.avatar} color={a.color} size={20} />
                 {a.name}{a.role ? ` · ${a.role}` : ''}
                 {!a.canUseTools && <span title="不写代码" style={{ opacity: 0.6 }}>💭</span>}
@@ -587,7 +602,7 @@ export default function App() {
       {showSettings && config && (
         <Settings config={config} templates={templates}
           initialTab={settingsTab}
-          onClose={() => setShowSettings(false)}
+          onClose={() => { setShowSettings(false); setClickToAt(localStorage.getItem('agora_clickToAt') !== 'false'); }}
           onChanged={refreshConfig} />
       )}
 

@@ -328,6 +328,7 @@ function AgentsTab({ config, templates, onChanged }) {
 function WorkspaceTab({ config, onChanged }) {
   const [ws, setWs] = useState(config.workspace || '');
   const [saved, setSaved] = useState(false);
+  const [clickToAt, setClickToAtLocal] = useState(() => localStorage.getItem('agora_clickToAt') !== 'false');
   async function save() {
     await api.setWorkspace(ws);
     await onChanged();
@@ -343,6 +344,17 @@ function WorkspaceTab({ config, onChanged }) {
         <button className="btn" onClick={save}>保存工作区路径</button>
         {saved && <span style={{ color: 'var(--ok)' }}>✓ 已保存</span>}
       </div>
+
+      <h3 style={{ marginTop: 20 }}>界面行为</h3>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+        <input type="checkbox" checked={clickToAt} onChange={(e) => {
+          const val = e.target.checked;
+          setClickToAtLocal(val);
+          localStorage.setItem('agora_clickToAt', val ? 'true' : 'false');
+        }} />
+        左键点击顶部成员头像时，插入 @名字 到输入框（而非直接触发发言）
+      </label>
+      <p className="inline-note" style={{ margin: '4px 0' }}>开启后，左键点击顶部 AI 头像会在输入框插入 @名字，避免误触直接触发发言。关闭则恢复原来的"点击即发言"。右键始终显示成员信息/私聊面板。</p>
     </div>
   );
 }

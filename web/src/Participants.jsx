@@ -12,6 +12,8 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
     for (const p of value || []) m[p.agentId] = { canUseTools: p.canUseTools !== false, sessionPrompt: p.sessionPrompt || '' };
     return m;
   });
+  // 选择顺序：记录 agentId 的先后，决定 @所有人 时的默认发言顺序
+  const [order, setOrder] = useState(() => (value || []).map(p => p.agentId));
   // 第2层：本对话全场发言总上限
   const [turnCap, setTurnCap] = useState(maxTurns || 6);
   // 本对话专属工作区（空 = 用全局默认）
@@ -28,13 +30,17 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
       else next[id] = { canUseTools: true, sessionPrompt: '' };
       return next;
     });
+    setOrder((prev) => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      return [...prev, id];
+    });
   }
   function update(id, patch) {
     setPicked((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
   }
 
   function confirm() {
-    const list = Object.entries(picked).map(([agentId, cfg]) => ({ agentId, ...cfg }));
+    const list = order.map((agentId) => ({ agentId, ...picked[agentId] })).filter(p => picked[p.agentId]);
     onConfirm(list, { maxTurnsPerRequest: Number(turnCap) || 6, workspace: ws.trim(), chatOnly: chatOnlyVal, title: titleVal.trim() || undefined });
   }
 
@@ -46,6 +52,7 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
         <p className="inline-note">勾选哪些 AI 参与这个对话。可为每个 AI 设定本对话内的职责，并决定它能否动手写代码/跑命令。</p>
+        <p className="inline-note" style={{ margin: '4px 0 8px', color: 'var(--muted)' }}>数字顺序即为 @所有人 时的默认发言顺序。单击数字可取消选中。</p>
 
         {editMode && (
           <div className="field" style={{ marginBottom: 12 }}>
@@ -63,7 +70,13 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
             <div className="card" key={a.id} style={{ outline: on ? '1.5px solid var(--accent)' : 'none' }}>
               <div className="card-head">
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={on} onChange={() => toggle(a.id)} />
+                  <span onClick={() => toggle(a.id)} style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 22, height: 22, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                    background: on ? 'var(--accent)' : 'var(--panel-2)',
+                    color: on ? '#fff' : 'var(--muted)',
+                    border: on ? 'none' : '1.5px solid var(--border)'
+                  }}>{on ? order.indexOf(a.id) + 1 : ''}</span>
                   <Avatar value={a.avatar} color={a.color} size={26} />
                   <strong>{a.name}</strong>{a.role && <span className="tag">{a.role}</span>}
                 </label>
