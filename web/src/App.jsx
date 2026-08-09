@@ -133,6 +133,15 @@ export default function App() {
     setAtBottom(true); setNewCount(0); prevLenRef.current = 0;
   }, [activeId, connected]);
 
+  // 切换对话时清空私聊面板：私聊是按对话隔离的，不能把上一个对话的私聊带到新对话里显示。
+  // 只依赖 activeId（不含 connected），避免断线重连时误清空。
+  useEffect(() => {
+    setPcChats({});
+    setPcOrder([]);
+    setPcActive(null);
+    setPcMinimized(false);
+  }, [activeId]);
+
   // 全局双击 Esc 终止本轮：第一次按下弹提示并"就绪"，2 秒内再按一次才真正终止
   useEffect(() => {
     function onKey(e) {
