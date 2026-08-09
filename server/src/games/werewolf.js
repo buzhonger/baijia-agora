@@ -123,6 +123,8 @@ async function freeDiscussion(g, emit, signal, log) {
   post(g, emit, { text: '💬 进入自由讨论：玩家可以互相质问、反驳、拉票、为自己辩护。' });
   const spoke = new Set();
   let anySpoke = true;
+  const firstDay = g.round <= 1;
+  const dayNotice = firstDay ? '【注意】今天是第1天白天，不存在"昨天白天"——请勿引用不存在的昨日白天内容。\n' : '';
   for (let round = 0; round < 2 && anySpoke; round++) {
     anySpoke = false;
     for (const p of alive(g)) {
@@ -132,7 +134,7 @@ async function freeDiscussion(g, emit, signal, log) {
       const hint = p._seerNote ? ` （只有你知道：${p._seerNote}）` : '';
       const speech = await ask(p,
         roleBrief(g, p) + hint + ` 现在是自由讨论环节。你可以质疑、反驳、拉票、为自己辩护，也可以用「@名字」直接点名质问某人。其他存活玩家：${others}。`,
-        `【当前公开记录】\n${log()}\n\n如果此刻发言对你的处境有利，就说一段有立场的话（1-3句，可以针对具体某人）。如果你认为保持沉默更好，只回复"过"。`,
+        `${dayNotice}【当前公开记录】\n${log()}\n\n如果此刻发言对你的处境有利，就说一段有立场的话（1-3句，可以针对具体某人）。如果你认为保持沉默更好，只回复"过"。`,
         signal, 240, g, emit);
       const s = (speech || '').trim();
       // 只回"过"/"沉默"等，视为不发言
@@ -157,6 +159,7 @@ function roleBrief(g, seat) {
     s += ' 目标：找出并票出所有狼人。';
   }
   s += ' 发言简短有立场（2-3句），像真人玩家，不要暴露这是AI。';
+  s += ' 【信息边界·严格遵守】①夜晚行动完全私密：每个角色各自单独行动，互相看不到也听不到他人夜间的行为或发言，白天绝对不能说"某人昨晚的行为/表现让我觉得……"之类的话——你不可能知道；②你只能依据"白天公开发言"和"法官公布的死亡信息"来判断和发言，其余一律不知道。';
   return s;
 }
 
@@ -349,11 +352,15 @@ async function dayPhase(g, emit, signal, deaths) {
   await judgePause(g, emit, signal, 'night', deaths.length ? '天亮·有人死亡' : '天亮·平安夜');
 
   // 第一轮固定发言：每人依次说一次
+  const firstDay = g.round <= 1;
+  const dayNotice = firstDay
+    ? '【注意】今天是第1天白天，这是整局游戏的第一次白天发言。之前没有任何"昨天白天"——那完全不存在，绝对不要提及或引用不存在的"上一轮白天发言/行为"。你只知道昨晚法官公布的死亡结果。\n'
+    : '';
   for (const p of alive(g)) {
     if (signal?.aborted) return;
     const hint = p._seerNote ? ` （只有你知道：${p._seerNote}）` : '';
     const speech = await ask(p, roleBrief(g, p) + hint,
-      `【当前公开记录】\n${log()}\n\n轮到你发言，说出你的怀疑和理由（2-3句）。`, signal, 260, g, emit);
+      `${dayNotice}【当前公开记录】\n${log()}\n\n轮到你发言，根据以上公开信息说出你的怀疑和理由（2-3句）。`, signal, 260, g, emit);
     post(g, emit, { player: p, text: speech });
     await sleep(120);
   }
