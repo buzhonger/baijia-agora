@@ -36,6 +36,7 @@ export default function App() {
   const [discoveredModels, setDiscoveredModels] = useState({}); // providerId -> models
   const [adjustFor, setAdjustFor] = useState(null); // 对话中调整某成员限制：agent 对象
   const [confirmDelete, setConfirmDelete] = useState(null); // 待确认删除的会话 {id,title}
+  const [escArmed, setEscArmed] = useState(false); // 第一次按 Esc 已就绪，再按一次终止本轮
   const [showSponsor, setShowSponsor] = useState(false); // 赞助弹窗
   const [gameInput, setGameInput] = useState(null); // 狼人杀轮到人类：{ inputId, prompt }
   const [gameInputText, setGameInputText] = useState('');
@@ -131,6 +132,23 @@ export default function App() {
     // 切换会话：回到底部、清零未读
     setAtBottom(true); setNewCount(0); prevLenRef.current = 0;
   }, [activeId, connected]);
+
+  // 全局双击 Esc 终止本轮：第一次按下弹提示并"就绪"，2 秒内再按一次才真正终止
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key !== 'Escape') return;
+      if (mentionMenu) return; // 提及菜单打开时，Esc 交给它关闭，不触发终止
+      if (!activeId || gameState) return; // 无对话或游戏中不处理
+      if (escArmed) {
+        stopTurn();
+      } else {
+        setEscArmed(true);
+        setTimeout(() => setEscArmed(false), 2000); // 2 秒内没再按就取消就绪
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [escArmed, mentionMenu, activeId, gameState]);
 
   // 智能滚动：在底部才跟随最新；用户滚上去看历史时不打扰，改为统计未读新消息
   useEffect(() => {
@@ -257,6 +275,13 @@ export default function App() {
   function stopAuto() {
     wsRef.current?.send({ type: 'stop_autoflow' });
     setAutoRunning(false);
+  }
+
+  // 终止本轮：中止后台正在跑的接力/自动协作，回到输入态。未发言的 AI 不进上下文。
+  function stopTurn() {
+    wsRef.current?.send({ type: 'stop_turn' });
+    setAutoRunning(false);
+    setEscArmed(false);
   }
 
   // 开一局狼人杀：新建一个专用会话，再发 start_game
@@ -536,6 +561,11 @@ export default function App() {
         </div>
 
         <div className="composer" style={{ position: 'relative' }}>
+          {escArmed && (
+            <div className="inline-note" style={{ marginBottom: 6, color: 'var(--danger)', fontWeight: 500 }}>
+              ⏹ 再按一次 <b>Esc</b> 终止本轮对话（未发言的 AI 不计入上下文）
+            </div>
+          )}
           {mentionMenu && (
             <div className="mention-menu" style={{ left: 16 }}>
               {mentionMenu.matches.map((a) => (

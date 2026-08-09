@@ -109,6 +109,7 @@ app.put('/api/sessions/:id/pin', (req, res) => {
   res.json(setPinned(s, req.body?.pinned));
 });
 app.delete('/api/sessions/:id', (req, res) => {
+  abortSession(req.params.id); // 先中止正在跑的接力循环，避免它继续写盘把已删对话重建出来
   deleteSession(req.params.id);
   res.json({ ok: true });
 });
@@ -129,6 +130,19 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // 每个 session 的活跃连接集合，用于广播
 const rooms = new Map(); // sessionId -> Set<ws>
 const pendingPcConfirm = new Map(); // 私聊危险操作确认：confirmId -> resolve
+// 每个 session 正在运行的接力/自动协作控制器，用于"删除对话"或"终止本轮"时中止后台循环
+const sessionControllers = new Map(); // sessionId -> Set<AbortController>
+function registerController(sessionId, controller) {
+  if (!sessionControllers.has(sessionId)) sessionControllers.set(sessionId, new Set());
+  sessionControllers.get(sessionId).add(controller);
+}
+function unregisterController(sessionId, controller) {
+  sessionControllers.get(sessionId)?.delete(controller);
+}
+function abortSession(sessionId) {
+  const set = sessionControllers.get(sessionId);
+  if (set) { for (const c of set) c.abort(); set.clear(); }
+}
 
 function broadcast(sessionId, event) {
   const set = rooms.get(sessionId);
@@ -189,6 +203,7 @@ wss.on('connection', (ws) => {
       ws.abortControllers.add(controller);
       // 捕获触发时的会话ID：即使用户切到别的对话，本次输出仍推送到原会话（不串台、不中断）
       const triggerSessionId = ws.sessionId;
+      registerController(triggerSessionId, controller); // 登记，供删除/终止时中止
       const emitToSession = (event) => broadcast(triggerSessionId, event);
 
       (async () => {
@@ -203,14 +218,16 @@ wss.on('connection', (ws) => {
           const isInitial = initialSet.has(current.id);
           // 紧邻重复只在非保底时跳过（保底成员即使刚被提及也要发言）
           if (current.id === lastSpoker && !isInitial) continue;
+          // 会话已被删除 → 立即停止，避免 addMessage/saveSession 把已删文件重建出来
+          if (!getSession(triggerSessionId)) break;
           const produced = await runAgentTurn({ session, agent: current, emit: emitToSession, signal: controller.signal, toolMode });
           turns += 1;
           lastSpoker = current.id;
 
           // 它 @ 了谁：被点名的人插到队列【最前面】，这样"点名→立刻接着说"，
           // 提示和真实发言顺序一致（之前加到末尾会导致提示与下一个发言者对不上）。
-          // noRelay=true 时禁止自动接龙。
-          if (!msg.noRelay) {
+          // noRelay=true 时禁止自动接龙。会话被删/已终止时也不再接龙。
+          if (!msg.noRelay && !controller.signal.aborted && getSession(triggerSessionId)) {
             const fresh = getSession(triggerSessionId);
             const mentioned = parseMentions(produced?.text, fresh, cfg.agents, current.id);
             // 按 @ 出现顺序，逆序 unshift，保证最终队首顺序 = 提及顺序
@@ -229,12 +246,12 @@ wss.on('connection', (ws) => {
             }
           }
         }
-        if (turns >= cap && queue.length) {
+        if (turns >= cap && queue.length && !controller.signal.aborted && getSession(triggerSessionId)) {
           const s2 = getSession(triggerSessionId);
           const note = addMessage(s2, { authorType: 'system', authorName: '系统', text: `⏹ 已达全场发言上限（${cap} 次），停止接力以节省 token。可调高上限或分批 @。` });
           emitToSession({ type: 'message_added', message: note });
         }
-      })().finally(() => ws.abortControllers.delete(controller));
+      })().finally(() => { ws.abortControllers.delete(controller); unregisterController(triggerSessionId, controller); });
       return;
     }
 
@@ -256,6 +273,16 @@ wss.on('connection', (ws) => {
     if (msg.type === 'stop_autoflow') {
       stopAutoFlow(ws.sessionId);
       emit({ type: 'system_note', text: '已停止自动协作。' });
+      return;
+    }
+
+    // 终止本轮：中止当前会话正在跑的接力/触发循环 + 自动协作。
+    // 已流式输出的部分保留（AI 能看到终止前的内容），未发言的队列被丢弃、不进上下文。
+    if (msg.type === 'stop_turn') {
+      abortSession(ws.sessionId);          // 中止本会话所有登记的接力循环
+      for (const c of ws.abortControllers) c.abort(); // 兜底：中止本连接其它在途请求
+      stopAutoFlow(ws.sessionId);          // 若正在自动协作也一并停
+      emit({ type: 'system_note', text: '⏹ 已终止本轮，未发言的 AI 不计入上下文。' });
       return;
     }
 
