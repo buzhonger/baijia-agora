@@ -444,17 +444,25 @@ async function runGame(session, gameConfig, emit) {
     }
     if (!controller.signal.aborted) {
       post(g, emit, { text: winner === 'good' ? '🏆 好人阵营胜利！所有狼人已出局。' : winner === 'wolf' ? '🏆 狼人阵营胜利！' : '游戏结束（达到回合上限）。' });
-      // 结局公布全部身份
       post(g, emit, { text: `📜 全场身份揭晓：\n${g.seats.map((s) => `${s.name} = ${ROLES[s.role].name}${s.alive ? '（存活）' : ''}`).join('\n')}` });
       post(g, emit, { text: '——本局结束。你可以继续和 AI 们复盘这局、聊聊心得，或点上方「🔄 再来一局」。' });
-      // 结算：把这局的 AI 座位留存到会话，供结束后继续对话/复盘
       session.game = { type: 'werewolf', status: 'finished', scenario: g.scenario.key, humanRole: g.humanRole,
         seats: g.seats.map((s) => ({ name: s.name, role: s.role, providerId: s.providerId, model: s.model, alive: s.alive, color: s.color, emoji: s.emoji })),
         winner };
       saveSession(session);
       emit({ type: 'game_state', game: session.game });
+    } else {
+      // 玩家手动终止：仍输出结局揭示，让 AI 可以复盘已发生的内容（只能看到终止前已输出的信息）
+      post(g, emit, { text: `🏳️ 本局游戏已终止（进行至第 ${g.round} 轮）。` });
+      post(g, emit, { text: `📜 身份揭晓：\n${g.seats.map((s) => `${s.name} = ${ROLES[s.role].name}${s.alive ? '（存活）' : '（已出局）'}`).join('\n')}` });
+      post(g, emit, { text: '——复盘时 AI 只能看到终止前已输出的内容。可点「🔄 再来一局」重开。' });
+      session.game = { type: 'werewolf', status: 'finished', scenario: g.scenario.key, humanRole: g.humanRole,
+        seats: g.seats.map((s) => ({ name: s.name, role: s.role, providerId: s.providerId, model: s.model, alive: s.alive, color: s.color, emoji: s.emoji })),
+        winner: null };
+      saveSession(session);
+      emit({ type: 'game_state', game: session.game });
     }
-    emit({ type: 'game_over', sessionId: session.id, winner });
+    emit({ type: 'game_over', sessionId: session.id, winner: winner || null });
   } finally {
     running.delete(session.id);
     saveSession(session);

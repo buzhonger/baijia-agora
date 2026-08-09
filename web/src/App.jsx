@@ -142,17 +142,30 @@ export default function App() {
     setPcMinimized(false);
   }, [activeId]);
 
-  // 全局双击 Esc 终止本轮：第一次按下弹提示并"就绪"，2 秒内再按一次才真正终止
+  // 全局双击 Esc：普通对话=终止本轮；游戏进行中=终止本局（跳至结局）
   useEffect(() => {
     function onKey(e) {
       if (e.key !== 'Escape') return;
-      if (mentionMenu) return; // 提及菜单打开时，Esc 交给它关闭，不触发终止
-      if (!activeId || gameState) return; // 无对话或游戏中不处理
+      if (mentionMenu) return;
+      if (!activeId) return;
+      if (gameState?.status === 'running') {
+        // 游戏进行中：双击 Esc 终止本局，后端会输出结局揭示
+        if (escArmed) {
+          wsRef.current?.send({ type: 'stop_game' });
+          setEscArmed(false);
+        } else {
+          setEscArmed(true);
+          setTimeout(() => setEscArmed(false), 2000);
+        }
+        return;
+      }
+      if (gameState) return; // 游戏已结束，Esc 不处理
+      // 普通对话：终止本轮接力
       if (escArmed) {
         stopTurn();
       } else {
         setEscArmed(true);
-        setTimeout(() => setEscArmed(false), 2000); // 2 秒内没再按就取消就绪
+        setTimeout(() => setEscArmed(false), 2000);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -455,7 +468,10 @@ export default function App() {
                 <span className="session-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   {partAgents.slice(0, 3).map((a) => <Avatar key={a.id} value={a.avatar} color={a.color} size={16} />)}
                   <span className="count">{s.messageCount}</span>
-                  <button className="row-icon" title="对话设置" onClick={(e) => { e.stopPropagation(); if (s.id === activeId) { setParticipantsUI({ mode: 'edit' }); } else { setActiveId(s.id); setTimeout(() => setParticipantsUI({ mode: 'edit' }), 300); } }}>⚙</button>
+                  {/* 游戏对话不显示"对话设置"：狼人杀局的参与者/配置在开局时就定好了，不能中途改 */}
+                  {!s.game && (
+                    <button className="row-icon" title="对话设置" onClick={(e) => { e.stopPropagation(); if (s.id === activeId) { setParticipantsUI({ mode: 'edit' }); } else { setActiveId(s.id); setTimeout(() => setParticipantsUI({ mode: 'edit' }), 300); } }}>⚙</button>
+                  )}
                   <button className="row-icon" title={s.pinned ? '取消收藏' : '收藏置顶'} onClick={(e) => togglePin(s, e)}
                     style={{ color: s.pinned ? 'var(--accent)' : undefined }}>{s.pinned ? '★' : '☆'}</button>
                   <button className="row-icon" title="删除对话" onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: s.id, title: s.title }); }}>🗑</button>
@@ -572,7 +588,7 @@ export default function App() {
         <div className="composer" style={{ position: 'relative' }}>
           {escArmed && (
             <div className="inline-note" style={{ marginBottom: 6, color: 'var(--danger)', fontWeight: 500 }}>
-              ⏹ 再按一次 <b>Esc</b> 终止本轮对话（未发言的 AI 不计入上下文）
+              ⏹ 再按一次 <b>Esc</b> {gameState?.status === 'running' ? '终止本局游戏（将跳至结局揭示）' : '终止本轮对话（未发言的 AI 不计入上下文）'}
             </div>
           )}
           {mentionMenu && (
