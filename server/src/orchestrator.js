@@ -34,7 +34,7 @@ function askConfirm(emit, payload) {
 
 // 让某个 agent 在 session 里应答一次。
 // emit(event) 会把事件推给前端；signal 用于中止。
-export async function runAgentTurn({ session, agent, emit, signal, enableTools = true, inAutoflow = false, toolMode = 'normal' }) {
+export async function runAgentTurn({ session, agent, emit, signal, enableTools = true, inAutoflow = false, toolMode = 'normal', mindThinking = false }) {
   const cfg = loadConfig();
   const provider = cfg.providers[agent.providerId];
   if (!provider || !provider.apiKey) {
@@ -47,11 +47,24 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
 
   // 读取该成员在本对话里的职责配置
   const pc = participantConfig(session, agent.id);
-  // 工具开关：全局 enableTools 且本对话允许该成员用工具，才真正启用
+  // 工具开关：全局 enableTools 且本对话允许该成员用工具,才真正启用
   const toolsOn = enableTools && pc.canUseTools !== false;
   // 系统提示词 = 成员自身设定 + 本对话职责说明 + 工具受限说明 + 在场成员名单
   let systemPrompt = agent.systemPrompt || '';
-  if (pc.sessionPrompt) systemPrompt += `\n\n【本对话职责】${pc.sessionPrompt}`;
+  // 独立提示词分段：支持 [思考区] 分隔符，前段约束思考、后段约束全局
+  let thinkingPrompt = ''; // 只约束思考区的规则
+  if (pc.sessionPrompt) {
+    const SEP = '[思考区]';
+    const idx = pc.sessionPrompt.indexOf(SEP);
+    if (idx !== -1) {
+      thinkingPrompt = pc.sessionPrompt.slice(0, idx).trim();
+      const globalPart = pc.sessionPrompt.slice(idx + SEP.length).trim();
+      if (globalPart) systemPrompt += `\n\n【本对话职责】${globalPart}`;
+    } else {
+      // 没有分隔符，整段作为全局约束（保持旧行为兼容）
+      systemPrompt += `\n\n【本对话职责】${pc.sessionPrompt}`;
+    }
+  }
   if (!toolsOn) systemPrompt += `\n\n【限制】在本对话中你不能读写文件或执行命令，只能通过文字参与讨论。`;
   // 告诉它在场有哪些队友，可以用 @名字 点名让对方接着发言
   const teammates = (session.participants || [])
@@ -73,6 +86,18 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
       + `\n• 如果你只是提到、感谢、引用某位队友（例如"谢谢${teammates[0]}的观点"），直接写名字，【绝对不要加 @】，否则会错误触发对方发言。`
       + `\n• 不需要别人接力时，正常回复，不要 @ 任何人。`
       + `\n• 绝不要 @ 你自己（${agent.name}）。`;
+  }
+
+  // 内心思考模式：让 AI 把"只给主持人看的思考"和"公开发言"分开输出
+  if (mindThinking) {
+    systemPrompt += `\n\n【输出格式——内心思考】你的每次回复都要分成两部分，严格按下面的格式：`
+      + `\n【思考】\n（这里写你的内心想法，只有主持人一个人能看到，其他 AI 完全看不到。可以写你的真实意图、推理过程、策略、对局势的判断等。要清晰、简洁、有价值，不要写成又臭又长的流水账——主持人要看的是你真实、有条理的想法。）`
+      + `\n【发言】\n（这里写你要公开说出来的话，其他所有 AI 和主持人都会看到。这是你对外的正式发言。）`
+      + `\n规则：①两个标记【思考】【发言】必须都写，且顺序固定（先思考后发言）；②只想让主持人知道、不希望其他 AI 看到的内容，放【思考】里；需要对外沟通的放【发言】里；③【发言】部分至少要有内容，不能空着。`;
+    // 如果独立提示词里有"思考区专用规则"，注入到【思考】约束
+    if (thinkingPrompt) {
+      systemPrompt += `\n【思考区规则补充】${thinkingPrompt}`;
+    }
   }
 
   // ===关键=== 注入该 AI 与用户的私聊历史（仅此 AI 可见，其他 AI 的上下文里没有这段）
@@ -100,9 +125,39 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
   // 先创建一条空的 assistant 消息，流式往里填
   const msg = addMessage(session, {
     authorType: 'agent', authorId: agent.id, authorName: agent.name, color: agent.color, avatar: agent.avatar, text: '',
-    meta: { model: agent.model, streaming: true },
+    meta: { model: agent.model, streaming: true, ...(mindThinking ? { thinking: '' } : {}) },
   });
   emit({ type: 'message_added', message: msg });
+
+  // 内心思考的流式分流状态：raw=累积原文；已推送的思考/发言长度；是否已见到【发言】标记
+  const SPEECH_MARK = '【发言】', THINK_MARK = '【思考】';
+  let raw = '', emittedThink = 0, emittedSpeech = 0;
+  // 把累积原文拆成 { think, speech, hasSpeech }
+  function splitRaw(s) {
+    const idx = s.indexOf(SPEECH_MARK);
+    if (idx === -1) { let t = s; if (t.startsWith(THINK_MARK)) t = t.slice(THINK_MARK.length); return { think: t, speech: '', hasSpeech: false }; }
+    let t = s.slice(0, idx); if (t.startsWith(THINK_MARK)) t = t.slice(THINK_MARK.length);
+    return { think: t, speech: s.slice(idx + SPEECH_MARK.length), hasSpeech: true };
+  }
+  // 处理一段新增文本：拆分并把新增部分分别推给思考区/发言区
+  function feedMind(chunk) {
+    raw += chunk;
+    const { think, speech, hasSpeech } = splitRaw(raw);
+    // 思考：未见【发言】前，末尾留出可能是半个标记的字符不推，避免把"【发"误当思考推出去
+    const safeThink = hasSpeech ? think.length : Math.max(0, think.length - (SPEECH_MARK.length - 1));
+    if (safeThink > emittedThink) {
+      const c = think.slice(emittedThink, safeThink);
+      msg.meta.thinking = (msg.meta.thinking || '') + c;
+      emit({ type: 'thinking_delta', messageId: msg.id, text: c });
+      emittedThink = safeThink;
+    }
+    if (hasSpeech && speech.length > emittedSpeech) {
+      const c = speech.slice(emittedSpeech);
+      msg.text += c;
+      emit({ type: 'message_delta', messageId: msg.id, text: c });
+      emittedSpeech = speech.length;
+    }
+  }
 
   // 工具调用循环：AI 可能要多轮调用工具后才给出最终答复
   let toolMessages = []; // 累积本轮的工具往返，供下一次调用
@@ -126,8 +181,12 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
         if (signal?.aborted) break;
         if (evt.type === 'text') {
           gotText = true;
-          msg.text += evt.text;
-          emit({ type: 'message_delta', messageId: msg.id, text: evt.text });
+          if (mindThinking) {
+            feedMind(evt.text); // 分流到思考区/发言区
+          } else {
+            msg.text += evt.text;
+            emit({ type: 'message_delta', messageId: msg.id, text: evt.text });
+          }
         } else if (evt.type === 'tool_call') {
           toolCalls.push(evt);
         }
@@ -183,9 +242,23 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
     toolMessages.push(...formatToolRoundtrip(provider.kind, toolResults));
   }
 
+  // 内心思考收尾：把尾巴 flush 出去；若 AI 没按格式输出【发言】，整段兜底为公开发言
+  if (mindThinking) {
+    const { think, speech, hasSpeech } = splitRaw(raw);
+    if (hasSpeech) {
+      if (think.length > emittedThink) { const c = think.slice(emittedThink); msg.meta.thinking = (msg.meta.thinking || '') + c; emit({ type: 'thinking_delta', messageId: msg.id, text: c }); emittedThink = think.length; }
+      if (speech.length > emittedSpeech) { const c = speech.slice(emittedSpeech); msg.text += c; emit({ type: 'message_delta', messageId: msg.id, text: c }); emittedSpeech = speech.length; }
+    } else if (raw.trim()) {
+      // 没有【发言】标记 → AI 没遵守格式，把整段当公开发言（安全：不隐藏任何东西），清空思考
+      msg.text = raw.replace(/^【思考】/, '').trim();
+      msg.meta.thinking = '';
+      emit({ type: 'mind_reset', messageId: msg.id, text: msg.text });
+    }
+  }
+
   // 空回复自动重试：有些模型（如 deepseek-v4-flash）偶发返回空，会打断接力链。
-  // 若正文为空，用非流式方式再请求一次补上。
-  if (!msg.text.trim() && !signal?.aborted) {
+  // 若正文为空，用非流式方式再请求一次补上。（内心思考模式下若已有思考内容，不算空）
+  if (!msg.text.trim() && !(mindThinking && (msg.meta.thinking || '').trim()) && !signal?.aborted) {
     try {
       let retry = '';
       const baseContext = buildContextFor(session, agent.id);
@@ -209,7 +282,7 @@ export async function runAgentTurn({ session, agent, emit, signal, enableTools =
 
   msg.meta.streaming = false;
   saveSession(session);
-  emit({ type: 'message_done', messageId: msg.id });
+  emit({ type: 'message_done', messageId: msg.id, thinking: msg.meta.thinking || '', text: msg.text });
   return msg;
 }
 

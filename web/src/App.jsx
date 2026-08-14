@@ -80,8 +80,20 @@ export default function App() {
         setMessages((m) => m.some((x) => x.id === evt.message.id) ? m : [...m, evt.message]);
       } else if (evt.type === 'message_delta') {
         setMessages((m) => m.map((x) => x.id === evt.messageId ? { ...x, text: x.text + evt.text } : x));
+      } else if (evt.type === 'thinking_delta') {
+        // 思考内容 delta 事件
+        setMessages((m) => m.map((x) => x.id === evt.messageId ? { ...x, thinking: (x.thinking || '') + evt.text } : x));
+      } else if (evt.type === 'mind_reset') {
+        // AI 没有按格式输出【发言】，整段视为公开发言，清空思考
+        setMessages((m) => m.map((x) => x.id === evt.messageId ? { ...x, text: evt.text, thinking: '' } : x));
       } else if (evt.type === 'message_done') {
-        setMessages((m) => m.map((x) => x.id === evt.messageId ? { ...x, meta: { ...x.meta, streaming: false } } : x));
+        // 用后端最终权威值覆盖（确保思考/发言分割准确）
+        setMessages((m) => m.map((x) => x.id === evt.messageId ? {
+          ...x,
+          text: evt.text != null ? evt.text : x.text,
+          thinking: evt.thinking != null ? evt.thinking : x.thinking,
+          meta: { ...x.meta, streaming: false },
+        } : x));
         refreshSessions();
       } else if (evt.type === 'confirm_request') {
         // pc- 前缀是私聊里的危险操作确认，单独弹
@@ -576,6 +588,7 @@ export default function App() {
             {!activeId && <div className="empty">{t('empty.pickOrNew')}</div>}
             {activeId && !messages.length && <div className="empty">{t('empty.startHint')}</div>}
             {messages.map((m) => <Message key={m.id} m={m} mentionNames={allAgents.map((a) => a.name)} roleMap={gameState?.showIdentity ? (gameState.roles || null) : null}
+              thinkingExpanded={session?.thinkingExpanded}
               onAvatarClick={!gameState && m.authorType === 'agent' ? () => { const a = allAgents.find((x) => x.id === m.authorId); if (a) setAgentCard(a); } : null} />)}
           </div>
           {activeId && !atBottom && (
@@ -671,6 +684,8 @@ export default function App() {
           workspace={participantsUI.mode === 'edit' ? (session?.workspace || '') : ''}
           defaultWorkspace={config?.workspace || ''}
           chatOnly={session?.chatOnly || false}
+          mindThinking={session?.mindThinking}
+          thinkingExpanded={session?.thinkingExpanded}
           sessionTitle={session?.title}
           editMode={participantsUI?.mode === 'edit'}
           onConfirm={confirmParticipants}
@@ -804,11 +819,15 @@ function CopyButton({ text }) {
   );
 }
 
-function Message({ m, mentionNames, roleMap, onAvatarClick }) {
+function Message({ m, mentionNames, roleMap, onAvatarClick, thinkingExpanded }) {
+  const [thinkingOpen, setThinkingOpen] = useState(Boolean(thinkingExpanded));
   const color = m.color || 'var(--muted)';
   const cls = m.authorType === 'user' ? 'user' : m.authorType === 'system' ? 'system' : 'agent';
-  // 游戏"按身份显示"时，在作者名旁标注身份（纯前端，AI 看不到）
+  // 游戏"按身份显示"时,在作者名旁标注身份(纯前端,AI 看不到)
   const idInfo = (roleMap && m.authorType === 'agent') ? roleMap.find((r) => r.name === m.authorName) : null;
+  // 思考内容：实时流式存在 m.thinking(顶层)，刷新后从后端加载时在 m.meta.thinking(嵌套)，两处都要兼容
+  const thinkingText = m.thinking || m.meta?.thinking || '';
+  const hasThinking = thinkingText && thinkingText.trim();
   return (
     <div className={`msg ${cls}`}>
       <div className="head">
@@ -816,6 +835,20 @@ function Message({ m, mentionNames, roleMap, onAvatarClick }) {
         <span className="who" style={{ color: m.authorType === 'agent' ? color : undefined }}>{m.authorName || '未知'}{idInfo && <span style={{ color: 'var(--muted)', fontWeight: 400 }}>（{idInfo.role}）</span>}</span>
         {m.meta?.model && <span className="model">{m.meta.model}</span>}
       </div>
+      {/* 思考区：只有 AI 且有 thinking 内容时显示 */}
+      {m.authorType === 'agent' && hasThinking && (
+        <div className="thinking-box" style={{ marginBottom: 8, borderLeft: `2px solid ${color}`, paddingLeft: 12, fontSize: 13, color: 'var(--muted)', background: 'rgba(0,0,0,0.02)', padding: '6px 12px', borderRadius: 4 }}>
+          <div onClick={() => setThinkingOpen(!thinkingOpen)} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
+            <span style={{ fontSize: 11 }}>{thinkingOpen ? '▼' : '▶'}</span>
+            <span>💭 内心思考（只有你能看到）</span>
+          </div>
+          {thinkingOpen && (
+            <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text)' }}>
+              {thinkingText}
+            </div>
+          )}
+        </div>
+      )}
       <div className="bubble" style={{ borderLeftColor: m.authorType === 'agent' ? color : 'var(--border)' }}>
         {m.authorType === 'agent'
           ? <span className={m.meta?.streaming ? 'cursor' : ''}><Markdown text={m.text} mentionNames={mentionNames} /></span>

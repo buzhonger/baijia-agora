@@ -93,13 +93,15 @@ app.get('/api/sessions/:id', (req, res) => {
   if (!s) return res.status(404).json({ error: 'not found' });
   res.json(s);
 });
-app.post('/api/sessions', (req, res) => res.json(createSession(req.body?.title, req.body?.participants, { maxTurnsPerRequest: req.body?.maxTurnsPerRequest, workspace: req.body?.workspace, chatOnly: req.body?.chatOnly })));
+app.post('/api/sessions', (req, res) => res.json(createSession(req.body?.title, req.body?.participants, { maxTurnsPerRequest: req.body?.maxTurnsPerRequest, workspace: req.body?.workspace, chatOnly: req.body?.chatOnly, mindThinking: req.body?.mindThinking, thinkingExpanded: req.body?.thinkingExpanded })));
 app.put('/api/sessions/:id/participants', (req, res) => {
   const s = getSession(req.params.id);
   if (!s) return res.status(404).json({ error: 'not found' });
   const opts = { maxTurnsPerRequest: req.body?.maxTurnsPerRequest };
   if ('workspace' in (req.body || {})) opts.workspace = req.body.workspace;
   if ('chatOnly' in (req.body || {})) opts.chatOnly = req.body.chatOnly;
+  if ('mindThinking' in (req.body || {})) opts.mindThinking = req.body.mindThinking;
+  if ('thinkingExpanded' in (req.body || {})) opts.thinkingExpanded = req.body.thinkingExpanded;
   if ('title' in (req.body || {})) opts.title = req.body.title;
   res.json(setParticipants(s, req.body?.participants || [], opts));
 });
@@ -197,6 +199,7 @@ wss.on('connection', (ws) => {
       const initialIds = msg.type === 'trigger_agents' ? (msg.agentIds || []) : [msg.agentId];
       const toolMode = msg.toolMode === 'auto' ? 'auto' : 'normal';
       const enableTools = !session.chatOnly; // 纯聊天模式：本次全程禁用工具
+      const mindThinking = session.mindThinking !== false; // 内心思考：默认开
       const queue = initialIds.map((id) => cfg.agents.find((a) => a.id === id)).filter(Boolean);
       if (!session || !queue.length) return;
       const controller = new AbortController();
@@ -220,7 +223,7 @@ wss.on('connection', (ws) => {
           if (current.id === lastSpoker && !isInitial) continue;
           // 会话已被删除 → 立即停止，避免 addMessage/saveSession 把已删文件重建出来
           if (!getSession(triggerSessionId)) break;
-          const produced = await runAgentTurn({ session, agent: current, emit: emitToSession, signal: controller.signal, toolMode });
+          const produced = await runAgentTurn({ session, agent: current, emit: emitToSession, signal: controller.signal, toolMode, mindThinking });
           turns += 1;
           lastSpoker = current.id;
 
@@ -266,6 +269,7 @@ wss.on('connection', (ws) => {
         order: msg.order || participantIds,
         emit, toolMode: msg.toolMode === 'auto' ? 'auto' : 'normal',
         enableTools: !session.chatOnly,
+        mindThinking: session.mindThinking !== false,
       });
       return;
     }

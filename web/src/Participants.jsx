@@ -5,7 +5,7 @@ import { Avatar } from './Settings.jsx';
 // value: 当前参与者数组 [{ agentId, canUseTools, sessionPrompt }]
 // allAgents: 全局成员池
 // onConfirm(participants), onClose
-export default function Participants({ title, allAgents, value, maxTurns, workspace, defaultWorkspace, chatOnly, sessionTitle, editMode, onConfirm, onClose, onAddMember, confirmLabel = '确定' }) {
+export default function Participants({ title, allAgents, value, maxTurns, workspace, defaultWorkspace, chatOnly, mindThinking, thinkingExpanded, sessionTitle, editMode, onConfirm, onClose, onAddMember, confirmLabel = '确定' }) {
   // 用 map 方便按 agentId 存取
   const [picked, setPicked] = useState(() => {
     const m = {};
@@ -20,6 +20,10 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
   const [ws, setWs] = useState(workspace || '');
   // 纯聊天模式
   const [chatOnlyVal, setChatOnlyVal] = useState(chatOnly || false);
+  // 内心思考（默认开）：新建时 mindThinking 传 undefined，视为开
+  const [mindVal, setMindVal] = useState(mindThinking !== false);
+  // 思考区默认展开（默认关=折叠）
+  const [expandVal, setExpandVal] = useState(Boolean(thinkingExpanded));
   // 对话名称（编辑模式）
   const [titleVal, setTitleVal] = useState(sessionTitle || '');
 
@@ -41,7 +45,7 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
 
   function confirm() {
     const list = order.map((agentId) => ({ agentId, ...picked[agentId] })).filter(p => picked[p.agentId]);
-    onConfirm(list, { maxTurnsPerRequest: Number(turnCap) || 6, workspace: ws.trim(), chatOnly: chatOnlyVal, title: titleVal.trim() || undefined });
+    onConfirm(list, { maxTurnsPerRequest: Number(turnCap) || 6, workspace: ws.trim(), chatOnly: chatOnlyVal, mindThinking: mindVal, thinkingExpanded: expandVal, title: titleVal.trim() || undefined });
   }
 
   return (
@@ -93,6 +97,9 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
                     <label>本对话职责（可选，仅本对话生效）</label>
                     <textarea value={cfg.sessionPrompt || ''} placeholder="如：只负责项目设计与架构，不写具体代码"
                       onChange={(e) => update(a.id, { sessionPrompt: e.target.value })} />
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                      💡 提示：在提示词中加入 <code>[思考区]</code> 可单独约束思考区。格式：<code>思考规则[思考区]全局身份约束</code>
+                    </div>
                   </div>
                 </div>
               )}
@@ -117,6 +124,17 @@ export default function Participants({ title, allAgents, value, maxTurns, worksp
           禁止所有 AI 调用工具（纯聊天）
         </label>
         <p className="inline-note" style={{ margin: 0 }}>开启后，本对话中所有 AI 都不会执行文件读写或命令（如 list_dir、run_command），只会用文字回复。适合纯讨论、录视频素材。</p>
+
+        <h3 style={{ marginTop: 20 }}>内心思考</h3>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 6, cursor: 'pointer' }}>
+          <input type="checkbox" checked={mindVal} onChange={(e) => setMindVal(e.target.checked)} />
+          开启内心思考（AI 的思考过程只有你能看到）
+        </label>
+        <p className="inline-note" style={{ margin: '0 0 8px' }}>开启后，每个 AI 的回复分成「思考」和「发言」两部分：思考只有你（主持人）能看到，<b>代码层面绝不会进入其他 AI 的上下文</b>；发言才是公开、其他 AI 能看到的。适合谁是卧底、囚徒困境等需要隐藏策略的玩法，也能让普通协作更干净。</p>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 6, cursor: mindVal ? 'pointer' : 'not-allowed', opacity: mindVal ? 1 : 0.4 }}>
+          <input type="checkbox" checked={expandVal} disabled={!mindVal} onChange={(e) => setExpandVal(e.target.checked)} />
+          思考区默认展开（关闭 = 默认折叠，点击才展开）
+        </label>
 
         <h3 style={{ marginTop: 20 }}>本对话工作区（可选）</h3>
         <div className="field">

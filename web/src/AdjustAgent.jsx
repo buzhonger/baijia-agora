@@ -40,6 +40,9 @@ export default function AdjustAgent({ agent, onSave, onClose }) {
           <label>本对话职责（仅本对话生效，可随阶段修改）</label>
           <textarea value={sessionPrompt} placeholder="如：现阶段你主导架构设计，多发表意见"
             onChange={(e) => setSessionPrompt(e.target.value)} />
+          <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+            💡 提示：在提示词中加入 <code>[思考区]</code> 可单独约束思考区。格式：<code>思考规则[思考区]全局身份约束</code>
+          </div>
         </div>
 
         <div className="btn-row">

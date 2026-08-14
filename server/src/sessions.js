@@ -61,6 +61,10 @@ export function createSession(title = '新协作', participants = [], options = 
     workspace: options.workspace ? String(options.workspace) : '',
     // 纯聊天模式：所有 AI 不调用工具，只用文字回复
     chatOnly: Boolean(options.chatOnly),
+    // 内心思考：AI 输出分"思考(仅主持人可见)"和"发言(其他AI可见)"。默认开启。
+    mindThinking: options.mindThinking !== false,
+    // 思考区默认是否展开（false=折叠）
+    thinkingExpanded: Boolean(options.thinkingExpanded),
     messages: [],
   };
   writeFileSync(sessionFile(session.id), JSON.stringify(session, null, 2), 'utf8');
@@ -87,6 +91,8 @@ export function setParticipants(session, participants, options = {}) {
   if ('maxTurnsPerRequest' in options) session.maxTurnsPerRequest = clampTurns(options.maxTurnsPerRequest);
   if ('workspace' in options) session.workspace = options.workspace ? String(options.workspace) : '';
   if ('chatOnly' in options) session.chatOnly = Boolean(options.chatOnly);
+  if ('mindThinking' in options) session.mindThinking = Boolean(options.mindThinking);
+  if ('thinkingExpanded' in options) session.thinkingExpanded = Boolean(options.thinkingExpanded);
   if (options.title) session.title = String(options.title);
   return saveSession(session);
 }
@@ -137,8 +143,15 @@ export function buildContextFor(session, selfAgentId) {
     if (m.authorType === 'system') continue;
     const isSelf = m.authorType === 'agent' && m.authorId === selfAgentId;
     const role = isSelf ? 'assistant' : 'user';
-    // 给非本人的发言加上作者前缀，让 AI 知道这句是谁说的
+    // 给非本人的发言加上作者前缀，让 AI 知道这句是谁说的。
+    // 注意：别人的内心思考存在 m.meta.thinking 里，从不进入这里
+    //  —— 这是"思考不泄露给其他 AI"的物理隔离点。
     let content = m.text || '';
+    if (isSelf && m.meta && m.meta.thinking && m.meta.thinking.trim()) {
+      // 自己的历史消息：按【思考】【发言】格式重建，让模型看到自己过往输出
+      // 的格式示范，避免它在后续回合"忘记"该用格式（自己的思考给自己看无泄露问题）。
+      content = `【思考】\n${m.meta.thinking}\n【发言】\n${content}`;
+    }
     if (!isSelf && m.authorName) {
       content = `【${m.authorName}】: ${content}`;
     }
