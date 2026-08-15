@@ -286,6 +286,13 @@ function AgentsTab({ config, templates, onChanged }) {
             {discovering ? '发现中…' : '🔍 发现可用模型'}</button>}
         </div>
         <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="如 deepseek-chat / glm-4-flash" />
+        {/* 豆包（火山方舟）特殊提示：模型名要填接入点 ID */}
+        {form.providerId === 'doubao' && (
+          <div className="inline-note" style={{ color: 'var(--danger)', marginTop: 6, padding: '8px 12px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 4 }}>
+            <strong>⚠️ 豆包特别提示：</strong>模型名不是填 "doubao-pro-32k-241215" 这种代号，而是填你在<a href="https://console.volcengine.com/ark" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>火山控制台</a>创建的<strong>推理接入点 ID</strong>（格式：ep-xxxxxxxx）。<br />
+            如果还没创建接入点，需先去控制台创建，选择你要用的模型（如 doubao-pro-32k），然后复制接入点 ID 填到这里。
+          </div>
+        )}
         {modelOptions.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
             {modelOptions.map((m) => (

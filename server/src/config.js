@@ -52,7 +52,7 @@ export const PROVIDER_TEMPLATES = {
     defaultModel: '',
     models: [],
     apply: 'https://www.volcengine.com/product/ark',
-    hint: '要在火山控制台创建"推理接入点"，模型名填接入点 ID（ep-xxxx）。较麻烦，需实名付费。',
+    hint: '⚠️ 重要：模型名不是填 doubao-pro-32k 这种代号，而是填你在火山控制台创建的【推理接入点 ID】（格式：ep-xxxxxxxx）。需先去控制台创建接入点、选择模型，然后复制接入点 ID。',
   },
   anthropic: {
     label: 'Anthropic (Claude)',
